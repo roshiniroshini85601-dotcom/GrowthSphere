@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  INTERN
+  MENTOR
+  NOT_MENTOR
+  NOT_EMPLOYEE
+}
+
+enum ReviewStatus {
+  COMPLETED
+  REOPENED
+  PENDING
+}
+
+enum TaskStatus {
+  COMPLETED
+  PENDING
+}
+
+model Employee {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  password    String   @default("changeme123") // hashed password; must be updated on first login
+  contactNo   String
+  role        Role     @default(NOT_EMPLOYEE)
+  address     String?
+  collegeName String?
+  degree      String?
+  flagged     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  mentees MentorMentee[] @relation("MentorRelation")
+  mentors MentorMentee[] @relation("MenteeRelation")
+
+  internMilestones InternMilestone[]
+  reviews          Review[]          @relation("ReviewIntern")
+  reviewsGiven     Review[]          @relation("Reviewer")
+  tasks            Task[]            @relation("TaskIntern")
+  tasksAssigned    Task[]            @relation("TaskReviewer")
+}
+
+model MentorMentee {
+  id       String @id @default(uuid())
+  mentorId String
+  menteeId String
+
+  mentor Employee @relation("MentorRelation", fields: [mentorId], references: [id], onDelete: Cascade)
+  mentee Employee @relation("MenteeRelation", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@unique([mentorId, menteeId])
+}
+
+model Topic {
+  id   String @id @default(uuid())
+  name String
+
+  milestones TopicMilestone[]
+}
+
+model TopicMilestone {
+  id      String  @id @default(uuid())
+  name    String
+  content String? @db.Text
+  link    String?
+  topicId String
+
+  topic Topic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  internMilestones InternMilestone[]
+}
+
+model InternMilestone {
+  id           String   @id @default(uuid())
+  internId     String
+  milestoneId  String
+  dateAssigned DateTime
+  internStatus Boolean  @default(false)
+
+  intern    Employee       @relation(fields: [internId], references: [id], onDelete: Cascade)
+  milestone TopicMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  @@unique([internId, milestoneId])
+}
+
+model Review {
+  id           String       @id @default(uuid())
+  title        String
+  description  String?      @db.Text
+  internId     String
+  dateReviewed DateTime
+  status       ReviewStatus @default(PENDING)
+  reviewerId   String
+  feedback     Json         @default("[]") // Array of { text, date, author }
+  internStatus Boolean      @default(false)
+
+  intern   Employee @relation("ReviewIntern", fields: [internId], references: [id], onDelete: Cascade)
+  reviewer Employee @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+}
+
+model Task {
+  id           String     @id @default(uuid())
+  name         String
+  description  String?    @db.Text
+  internId     String
+  dateReviewed DateTime
+  status       TaskStatus @default(PENDING)
+  reviewerId   String
+  feedback     Json       @default("[]") // Array of { text, date, author }
+  internStatus Boolean    @default(false)
+  milestoneIds Json       @default("[]") // Array of TopicMilestone IDs this task is linked to
+
+  intern   Employee @relation("TaskIntern", fields: [internId], references: [id], onDelete: Cascade)
+  reviewer Employee @relation("TaskReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+}
